@@ -704,7 +704,7 @@ class TestCZMQ(unittest.TestCase):
         self.assertEqual(msg.addmem(blank, 65537), 0)
         del blank
         self.assertEqual(msg.size(), 9)
-        buffer = POINTER(c_byte)()
+        buffer = c_void_p()
         buffer_size = msg.encode(buffer)
         del msg
         msg = Zmsg.decode(buffer, buffer_size)
