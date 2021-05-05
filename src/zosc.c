@@ -169,8 +169,8 @@ zosc_destroy (zosc_t **self_p)
     if (*self_p) {
         zosc_t *self = *self_p;
         //  Free class properties here
-        self->address = NULL;
-        self->format = NULL;
+        zstr_free(&self->address);
+        zstr_free(&self->format);
         zchunk_destroy(&self->chunk);
         if (self->data_indexes)
             free(self->data_indexes);
@@ -234,12 +234,12 @@ zosc_frommem (char *data, size_t size)
     assert (self);
 
     // copy the address string
-    self->address = data; // without copy
+    self->address = strdup(data);
     //self->address = zmalloc( address_end * sizeof(char) );
     //memcpy(self->address, data, address_end * sizeof(char));
 
     // copy the format string
-    self->format = data+format_start; // without copy
+    self->format = strdup(data+format_start);
     //size_t format_size = needle - format_start;
     //self->format = zmalloc( format_size * sizeof(char) );
     //memcpy(self->format, data+format_start, format_size * sizeof(char));
@@ -288,10 +288,10 @@ zosc_create (const char *address, const char *format, ...)
     va_start(argptr, format);
     s_append_data(self->chunk, format, argptr);
     va_end(argptr);
-    // the chunk data starts with the address string
-    self->address =  (char *)zchunk_data(self->chunk);
-    // set the format string to the pointer in the chunk of data
-    self->format = (char *)zchunk_data(self->chunk)+format_start;
+    // the chunk data starts with the address string, copy it
+    self->address =  strdup((char *)zchunk_data(self->chunk));
+    // the format string is behind the address string, copy it
+    self->format = strdup((char *)zchunk_data(self->chunk)+format_start);
 
     return self;
 }
@@ -392,10 +392,12 @@ zosc_append(zosc_t *self, const char *format, ...)
     zchunk_destroy(&self->chunk);
     self->chunk = newchunk;
     self->data_begin = new_data_begin;
-    // the chunk data starts with the address string
-    self->address =  (char *)zchunk_data(self->chunk);
+    // the chunk data starts with the address string, copy it
+    zstr_free(&self->address);
+    self->address = strdup((char *)zchunk_data(self->chunk));
     // set the format string to the pointer in the chunk of data
-    self->format = (char *)zchunk_data(self->chunk)+format_start;
+    zstr_free(&self->format);
+    self->format = strdup((char *)zchunk_data(self->chunk)+format_start);
     // release the indexes
     if (self->data_indexes)
     {
