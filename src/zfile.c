@@ -79,8 +79,15 @@ zfile_new (const char *path, const char *name)
         sprintf (self->fullname, "%s/%s", path, name);
     }
     else
-        self->fullname = strdup (name);
-
+    {
+        // resolve the name to capture relative paths
+        char resolved_path[PATH_MAX];
+        if ( realpath(name, resolved_path) )
+            self->fullname = strdup(resolved_path);
+        else
+            // realpath probably returned no such file or dir, so continue with the path as is
+            self->fullname = strdup(name);
+    }
     //  Resolve symbolic link if possible
     if (strlen (self->fullname) > 3
     &&  streq (self->fullname + strlen (self->fullname) - 3, ".ln")) {
@@ -229,11 +236,17 @@ const char *
 zfile_filename (zfile_t *self, const char *path)
 {
     assert (self);
+    if (path == NULL)
+        return self->fullname;
+
+    char resolved_path[PATH_MAX];
+    realpath(path, resolved_path);
+
     char *name = self->fullname;
-    if (path
-    &&  strlen (self->fullname) >= strlen (path)
-    &&  memcmp (self->fullname, path, strlen (path)) == 0) {
-        name += strlen (path);
+    if ( strlen (self->fullname) >= strlen (resolved_path)
+         &&  memcmp (self->fullname, resolved_path, strlen (resolved_path)) == 0)
+    {
+        name += strlen (resolved_path);
         while (*name == '/')
             name++;
     }
@@ -731,6 +744,26 @@ zfile_test (bool verbose)
     assert (streq (zfile_filename (file, "."), testfile));
     assert (zfile_is_readable (file) == false);
     zfile_destroy (&file);
+
+    // create a file without a path
+    zfile_t *relfile = zfile_new(NULL, "relfile.tst");
+    assert(relfile);
+    char cwd[PATH_MAX];
+    getcwd(cwd, PATH_MAX);
+    char relfilepath[PATH_MAX];
+    sprintf(relfilepath, "%s/%s", cwd, "relfile.tst");
+    // test the full path
+    assert(streq( zfile_filename(relfile, NULL), relfilepath ));
+    assert(streq( zfile_filename(relfile, "."), "relfile.tst" ));
+    // test previous dir path ("..")
+    char *last_slash = strrchr (cwd, '/');
+    if (last_slash)
+    {
+        *last_slash = 0;
+        sprintf(relfilepath, "%s/%s", &last_slash[1], "relfile.tst");
+        assert(streq( zfile_filename(relfile, ".."), relfilepath ));
+    }
+    zfile_destroy(&relfile);
 
     //  Create a test file in some random subdirectory
     if (verbose)
